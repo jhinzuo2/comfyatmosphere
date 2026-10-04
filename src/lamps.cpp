@@ -1516,8 +1516,20 @@ int LampsGather(const float cam[3], const D3DMATRIX& viewProj, LampLight* out, i
                     if (l.dist > reach || !InView(frustum, l.pos, it.reach))
                         break;
                     const float fade = edge(l.dist);
+                    // A fire wavers: three sines at unrelated rates, a different phase for each item and
+                    // player so two fires do not flicker together. The reach stays put, so the light's edge does
+                    // not crawl across the ground.
+                    float flick = 1.0f;
+                    if (il.flicker > 0.0f)
+                    {
+                        const double t  = Now() * il.flickerSpeed;
+                        const double ph = it.id * 0.618 + p * 1.31;
+                        const float  w  = static_cast<float>(0.5 * sin(t * 7.1 + ph) + 0.3 * sin(t * 11.7 + ph * 1.7) +
+                                                             0.2 * sin(t * 19.3 + ph * 2.3));
+                        flick = (std::max)(0.0f, 1.0f + il.flicker * 0.7f * w);
+                    }
                     for (int i = 0; i < 3; ++i)
-                        l.colour[i] = it.colour[i] * il.gain * it.gain * fade;
+                        l.colour[i] = it.colour[i] * il.gain * it.gain * fade * flick;
                     l.reach = it.reach;
                     l.kind  = 1;
                     l.fire  = true;

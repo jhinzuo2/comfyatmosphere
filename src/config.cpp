@@ -356,6 +356,8 @@ void LoadSettings(const wchar_t* ini)
     s.itemLights.forward    = Clamp(GetF(kItemLights, L"forward", s.itemLights.forward, ini), -3.0f, 3.0f);
     s.itemLights.side       = Clamp(GetF(kItemLights, L"side",    s.itemLights.side,    ini), -3.0f, 3.0f);
     s.itemLights.gain       = Clamp(GetF(kItemLights, L"gain",    s.itemLights.gain,    ini), 0.0f, 10.0f);
+    s.itemLights.flicker      = Clamp(GetF(kItemLights, L"flicker",      s.itemLights.flicker,      ini), 0.0f, 1.0f);
+    s.itemLights.flickerSpeed = Clamp(GetF(kItemLights, L"flickerSpeed", s.itemLights.flickerSpeed, ini), 0.1f, 8.0f);
     s.itemLights.maxPlayers = GetI(kItemLights, L"maxPlayers", s.itemLights.maxPlayers, ini);
     if (s.itemLights.maxPlayers < 1)  s.itemLights.maxPlayers = 1;
     if (s.itemLights.maxPlayers > 96) s.itemLights.maxPlayers = 96;

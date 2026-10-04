@@ -364,6 +364,8 @@ struct ItemLightSettings
     float    side      = 0.0f;      // yards to the character's left (a shield arm); negative = right
     float    gain      = 1.5f;      // brightness: the colour times this. A building's fire is 1.5 as well
     int      maxPlayers = 48;       // players looked at, in the order the client holds them
+    float    flicker    = 0.30f;    // 0..1: how far the light's brightness wavers, as a fire's does. 0 = steady
+    float    flickerSpeed = 1.0f;   // how fast; 1 is a few flickers a second
     std::vector<ItemLight> items;   // "items = id:RRGGBB:reach:gain, ..." in the ini
 };
 
