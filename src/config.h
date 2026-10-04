@@ -341,6 +341,32 @@ struct LampSettings
                                     // 3 = the light on surfaces alone
 };
 
+// Light from the items players wear (lamps.cpp, drawn by lampglow.cpp): a shield or weapon with a flame on it
+// does not light the world on its own, as the client gives such an item no light. Each item listed in
+// [itemlights] items makes a fire light at the player who wears it. Items are found by their entry id in the
+// player's visible item fields (client.cpp).
+struct ItemLight
+{
+    unsigned id        = 0;
+    float    colour[3] = { 1.00f, 0.62f, 0.29f };   // a torch's, as the buildings' fires are
+    float    reach     = 6.0f;                      // yards
+    float    gain      = 1.0f;                      // this item's brightness, times [itemlights] gain
+};
+
+struct ItemLightSettings
+{
+    bool     enabled   = true;      // with no items listed, nothing is looked at
+    bool     players   = true;      // other players' items too; 0 = only yours
+    unsigned fieldFrom = 0x102;     // the update fields searched for an item's entry id (1.12: the visible items
+    unsigned fieldTo   = 0x1E8;     // start near 0x104, 12 fields to a slot). F12 logs what the window holds
+    float    height    = 1.2f;      // yards above the feet
+    float    forward   = 0.3f;      // yards in front of the character
+    float    side      = 0.0f;      // yards to the character's left (a shield arm); negative = right
+    float    gain      = 1.5f;      // brightness: the colour times this. A building's fire is 1.5 as well
+    int      maxPlayers = 48;       // players looked at, in the order the client holds them
+    std::vector<ItemLight> items;   // "items = id:RRGGBB:reach:gain, ..." in the ini
+};
+
 // Sun rays (rays.cpp): a radial blur of the bright sky toward the sun, drawn after the world and before
 // the UI. Cheap, and needs neither [depth] nor [shadow].
 struct RaysSettings
@@ -437,6 +463,7 @@ struct Settings
     ShadowSettings shadow;
     VolumeSettings volume;
     LampSettings lamps;
+    ItemLightSettings itemLights;
     SunShadowSettings sunShadows;
     FogSettings  fog;
     SunSettings  sun;

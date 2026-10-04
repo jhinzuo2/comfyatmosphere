@@ -54,6 +54,7 @@ namespace
     const wchar_t* kShadow  = L"shadow";
     const wchar_t* kVolume  = L"volume";
     const wchar_t* kLamps   = L"lamps";
+    const wchar_t* kItemLights = L"itemlights";
     const wchar_t* kSunShadows = L"sunshadows";
     const wchar_t* kRays    = L"rays";
     const wchar_t* kNight   = L"night";
@@ -106,6 +107,62 @@ namespace
     }
 
     float Clamp(float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); }
+
+    // [itemlights] items = "12345:FF9A40:6:1.5, 23456". Each entry is the item's entry id, then optionally the
+    // colour (RRGGBB, hex), the reach in yards and the gain. Entries are separated by commas or spaces; the
+    // text runs on to any comment, so it ends at a ';'.
+    void ParseItemLights(const wchar_t* text, std::vector<ItemLight>& out)
+    {
+        std::string s = Narrow(text);
+        const size_t semi = s.find(';');
+        if (semi != std::string::npos)
+            s.erase(semi);
+        for (char& c : s)
+            if (c == ',' || c == '\t')
+                c = ' ';
+        size_t i = 0;
+        while (i < s.size() && out.size() < 32)
+        {
+            while (i < s.size() && s[i] == ' ')
+                ++i;
+            size_t j = i;
+            while (j < s.size() && s[j] != ' ')
+                ++j;
+            if (j > i)
+            {
+                const std::string entry = s.substr(i, j - i);
+                std::vector<std::string> part;
+                size_t a = 0;
+                for (;;)
+                {
+                    const size_t b = entry.find(':', a);
+                    part.push_back(entry.substr(a, b == std::string::npos ? std::string::npos : b - a));
+                    if (b == std::string::npos)
+                        break;
+                    a = b + 1;
+                }
+                ItemLight it;
+                it.id = static_cast<unsigned>(strtoul(part[0].c_str(), nullptr, 10));
+                if (part.size() > 1 && !part[1].empty())
+                {
+                    const char* h = part[1].c_str();
+                    if (*h == '#')
+                        ++h;
+                    const unsigned long rgb = strtoul(h, nullptr, 16) & 0xFFFFFF;
+                    it.colour[0] = ((rgb >> 16) & 0xFF) / 255.0f;
+                    it.colour[1] = ((rgb >> 8) & 0xFF) / 255.0f;
+                    it.colour[2] = (rgb & 0xFF) / 255.0f;
+                }
+                if (part.size() > 2 && !part[2].empty())
+                    it.reach = Clamp(static_cast<float>(atof(part[2].c_str())), 1.0f, 40.0f);
+                if (part.size() > 3 && !part[3].empty())
+                    it.gain = Clamp(static_cast<float>(atof(part[3].c_str())), 0.0f, 10.0f);
+                if (it.id)
+                    out.push_back(it);
+            }
+            i = j;
+        }
+    }
 }
 
 void ResolveIniPath(HMODULE self, wchar_t* out, size_t count)
@@ -290,6 +347,26 @@ void LoadSettings(const wchar_t* ini)
     s.lamps.spriteReach  = Clamp(GetF(kLamps, L"spriteReach",  s.lamps.spriteReach,  ini), 1.0f, 60.0f);
     s.lamps.spriteGain   = Clamp(GetF(kLamps, L"spriteGain",   s.lamps.spriteGain,   ini), 0.0f, 10.0f);
     s.lamps.debug        = GetI(kLamps, L"debug", s.lamps.debug, ini);
+
+    s.itemLights.enabled    = GetB(kItemLights, L"enabled", s.itemLights.enabled, ini);
+    s.itemLights.players    = GetB(kItemLights, L"players", s.itemLights.players, ini);
+    s.itemLights.fieldFrom  = GetX(kItemLights, L"fieldFrom", s.itemLights.fieldFrom, ini);
+    s.itemLights.fieldTo    = GetX(kItemLights, L"fieldTo",   s.itemLights.fieldTo,   ini);
+    s.itemLights.height     = Clamp(GetF(kItemLights, L"height",  s.itemLights.height,  ini), -2.0f, 6.0f);
+    s.itemLights.forward    = Clamp(GetF(kItemLights, L"forward", s.itemLights.forward, ini), -3.0f, 3.0f);
+    s.itemLights.side       = Clamp(GetF(kItemLights, L"side",    s.itemLights.side,    ini), -3.0f, 3.0f);
+    s.itemLights.gain       = Clamp(GetF(kItemLights, L"gain",    s.itemLights.gain,    ini), 0.0f, 10.0f);
+    s.itemLights.maxPlayers = GetI(kItemLights, L"maxPlayers", s.itemLights.maxPlayers, ini);
+    if (s.itemLights.maxPlayers < 1)  s.itemLights.maxPlayers = 1;
+    if (s.itemLights.maxPlayers > 96) s.itemLights.maxPlayers = 96;
+    if (s.itemLights.fieldFrom > 0x400) s.itemLights.fieldFrom = 0x400;
+    if (s.itemLights.fieldTo > s.itemLights.fieldFrom + 0x100) s.itemLights.fieldTo = s.itemLights.fieldFrom + 0x100;
+    if (s.itemLights.fieldTo < s.itemLights.fieldFrom) s.itemLights.fieldTo = s.itemLights.fieldFrom;
+    {
+        wchar_t list[512] = {};
+        GetPrivateProfileStringW(kItemLights, L"items", L"", list, 512, ini);
+        ParseItemLights(list, s.itemLights.items);
+    }
 
     s.rays.enabled      = GetB(kRays, L"enabled",      s.rays.enabled,      ini);
     s.rays.strength     = Clamp(GetF(kRays, L"strength",     s.rays.strength,     ini), 0.0f, 100.0f);

@@ -1,0 +1,47 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write   # only the tag release step below uses it
+
+jobs:
+  build:
+    # The 1.12 client is 32-bit, so the DLL must be too (see CMakeLists.txt).
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # cmake/version.cmake reads the version from git
+
+      - name: Configure (Win32)
+        run: cmake -B build -A Win32
+
+      - name: Build (Release)
+        run: cmake --build build --config Release
+
+      - name: Package
+        shell: pwsh
+        run: |
+          if (-not (Test-Path comfyfog.dll)) { throw "comfyfog.dll was not built" }
+          New-Item -ItemType Directory -Force dist/Interface/AddOns | Out-Null
+          Copy-Item comfyfog.dll, comfyfog.ini, README.md, LICENSE dist/
+          Copy-Item addon/ComfyAtmosphere dist/Interface/AddOns/ -Recurse
+          Compress-Archive -Path dist/* -DestinationPath comfyatmosphere.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: comfyatmosphere-${{ github.sha }}
+          path: comfyatmosphere.zip
+
+      - name: Release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: comfyatmosphere.zip
+          prerelease: true

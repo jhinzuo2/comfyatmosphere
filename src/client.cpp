@@ -159,6 +159,52 @@ int ClientUnits(float (*out)[3], int max)
         return n;
     }
 
+// Every player (type 4) out of the object manager, by the same walk as ClientUnits: the position and facing
+// where the player object keeps them (playerPosOff, then the rotation 0xC after the position), and a window of
+// the update fields (the pointer at +0x8), for the items the player wears. A player whose fields cannot be read
+// is kept with the window zeroed. The local player is the one whose guid the manager names.
+int ClientPlayers(ClientPlayerInfo* out, int max, unsigned fieldFrom, unsigned fieldTo)
+    {
+        const ClientSettings& b = g_cfg.client;
+        if (!b.objMgrAddr || !b.playerPosOff || max <= 0 || fieldTo <= fieldFrom)
+            return 0;
+        if (fieldTo - fieldFrom > static_cast<unsigned>(kClientFieldWindow))
+            fieldTo = fieldFrom + kClientFieldWindow;
+        DWORD mgr = 0;
+        if (!SafeCopy(static_cast<uintptr_t>(b.objMgrAddr + Slide()), &mgr, 4) || !mgr)
+            return 0;
+        DWORD guid[2] = {}, link = 0, obj = 0;
+        SafeCopy(mgr + 0xC0, guid, 8);
+        if (!SafeCopy(mgr + 0xA4, &link, 4) || !SafeCopy(mgr + 0xAC, &obj, 4))
+            return 0;
+        int n = 0;
+        for (int i = 0; i < 16384 && obj && !(obj & 1) && n < max; ++i)
+        {
+            DWORD type = 0;
+            if (!SafeCopy(obj + 0x14, &type, 4))
+                break;
+            float pf[4];
+            if (type == 4 && SafeCopy(obj + b.playerPosOff, pf, 16) && SaneWorld(pf))
+            {
+                ClientPlayerInfo& p = out[n];
+                memcpy(p.pos, pf, 12);
+                p.facing = pf[3] == pf[3] ? pf[3] : 0.0f;
+                DWORD g[2] = {};
+                p.local = (guid[0] || guid[1]) && SafeCopy(obj + 0x30, g, 8) && g[0] == guid[0] && g[1] == guid[1];
+                memset(p.fields, 0, sizeof(p.fields));
+                DWORD fields = 0;
+                if (SafeCopy(obj + 0x8, &fields, 4) && fields)
+                    SafeCopy(fields + fieldFrom * 4, p.fields, (fieldTo - fieldFrom) * 4);
+                ++n;
+            }
+            DWORD next = 0;
+            if (!SafeCopy(obj + link + 4, &next, 4))
+                break;
+            obj = next;
+        }
+        return n;
+    }
+
 // Every game object (type 5) out of the object manager, by the same walk (2026-10-01). Its fields (the pointer at
 // +0x8) are 1.12's update fields: the scale at 0x4, then GAMEOBJECT_DISPLAYID at 0x8 and POS_X, POS_Y, POS_Z,
 // FACING at 0xF..0x12. In Stormwind's Trade District a torch and two lampposts are game objects: no map file

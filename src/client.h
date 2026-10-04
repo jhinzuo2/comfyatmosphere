@@ -18,3 +18,15 @@ struct ClientObject
     unsigned display;   // GameObjectDisplayInfo.dbc row
 };
 int  ClientGameObjects(ClientObject* out, int max);   // every game object; the count
+
+// Every player's position and facing, with a window of their update fields (2026-10-04): the visible item
+// entries sit in it ([itemlights] fieldFrom..fieldTo, counted in dwords from the start of the fields).
+constexpr int kClientFieldWindow = 0x100;   // dwords of fields a player entry holds, at most
+struct ClientPlayerInfo
+{
+    float    pos[3];                        // world position (feet); on a ship, relative to the ship
+    float    facing;                        // radians about z, counter-clockwise from +x
+    bool     local;                         // the local player
+    unsigned fields[kClientFieldWindow];    // fields fieldFrom .. fieldTo - 1
+};
+int  ClientPlayers(ClientPlayerInfo* out, int max, unsigned fieldFrom, unsigned fieldTo);   // the count

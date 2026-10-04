@@ -921,6 +921,7 @@ namespace
     unsigned              g_cacheAge  = 0;
     std::vector<Sighting> g_sightings;
     std::vector<Tracked>  g_tracked;
+    int                   g_itemLightCount = 0;   // [itemlights]: item lights the last gather made
 
     float Dist3(const float a[3], const float b[3])
     {
@@ -1114,6 +1115,40 @@ namespace
     // ---------------------------------------------------------------------------------------------
     // the report
 
+    // [itemlights]: what the local player's field window holds, so an item's entry id and the window can be
+    // checked against the item's tooltip. Only values that could be an item entry are listed.
+    void ItemFieldsReport()
+    {
+        const ItemLightSettings& il = g_cfg.itemLights;
+        Log("itemlights: %s, %u items listed, %d item lights drawn in the last gather, window fields 0x%X..0x%X",
+            il.enabled ? "on" : "off", static_cast<unsigned>(il.items.size()), g_itemLightCount, il.fieldFrom, il.fieldTo);
+        if (!il.enabled)
+            return;
+        static ClientPlayerInfo players[96];
+        const int np = ClientPlayers(players, 96, il.fieldFrom, il.fieldTo);
+        for (int p = 0; p < np; ++p)
+        {
+            if (!players[p].local)
+                continue;
+            unsigned shown = 0;
+            for (unsigned f = 0; f < il.fieldTo - il.fieldFrom && shown < 80; ++f)
+            {
+                const unsigned v = players[p].fields[f];
+                if (v < 1000 || v > 99999)
+                    continue;
+                bool listed = false;
+                for (const ItemLight& it : il.items)
+                    listed = listed || it.id == v;
+                Log("itemlights: you: field 0x%03X = %u%s", il.fieldFrom + f, v, listed ? "  <- in [itemlights] items" : "");
+                ++shown;
+            }
+            if (!shown)
+                Log("itemlights: you: no field in the window holds a value from 1000 to 99999: wrong window?");
+            return;
+        }
+        Log("itemlights: the local player was not found among %d players", np);
+    }
+
     void SortByDistance(PlaceList& list)
     {
         std::sort(list.places.begin(), list.places.end(),
@@ -1133,6 +1168,7 @@ namespace
             !havePlayer ? " (not read)" : onShip ? " (on a ship: the camera's)" : "", static_cast<int>(hour), static_cast<int>(hour * 60.0f) % 60,
             haveHour ? "" : " (no clock)");
         Log("lamps: %u world draws in the window", g_nDraws);
+        ItemFieldsReport();
 
         SortByDistance(g_shaderPlaces);
         Log("lamps: SHADER LIGHTS: %u of %u draws through a shader that can take a light had one lit; %u places "
@@ -1433,6 +1469,64 @@ int LampsGather(const float cam[3], const D3DMATRIX& viewProj, LampLight* out, i
         l.kind  = t.kind;
         l.fire  = t.kind == 0;   // the client's own lights are torches and braziers; its glow sprites, lampposts
         g_gathered.push_back(l);
+    }
+    // Lights for the items players wear ([itemlights], 2026-10-04): the client gives a flaming shield or weapon
+    // no light, so each listed item found in a player's visible item fields gets a fire light at the player.
+    g_itemLightCount = 0;
+    const ItemLightSettings& il = g_cfg.itemLights;
+    if (il.enabled && !il.items.empty())
+    {
+        static ClientPlayerInfo players[96];
+        const int np = ClientPlayers(players, (std::min)(il.maxPlayers, 96), il.fieldFrom, il.fieldTo);
+        const unsigned nfields = il.fieldTo - il.fieldFrom;
+        const float cull = reach + 5.0f;
+        for (int p = 0; p < np; ++p)
+        {
+            const ClientPlayerInfo& pl = players[p];
+            if (!il.players && !pl.local)
+                continue;
+            const float dx = pl.pos[0] - cam[0], dy = pl.pos[1] - cam[1], dz = pl.pos[2] - cam[2];
+            if (dx * dx + dy * dy + dz * dz > cull * cull)
+                continue;
+            const float cf = cosf(pl.facing), sf = sinf(pl.facing);
+            const float at[3] = { pl.pos[0] + cf * il.forward - sf * il.side,
+                                  pl.pos[1] + sf * il.forward + cf * il.side,
+                                  pl.pos[2] + il.height };
+            unsigned used[8];
+            int      nused = 0;
+            for (unsigned f = 0; f < nfields && nused < 8; ++f)
+            {
+                const unsigned v = pl.fields[f];
+                if (!v)
+                    continue;
+                for (const ItemLight& it : il.items)
+                {
+                    if (it.id != v)
+                        continue;
+                    bool again = false;
+                    for (int u = 0; u < nused; ++u)
+                        again = again || used[u] == v;
+                    if (again)
+                        break;
+                    used[nused++] = v;
+                    LampLight l = {};
+                    for (int i = 0; i < 3; ++i)
+                        l.pos[i] = at[i] - cam[i];
+                    l.dist = Len3(l.pos);
+                    if (l.dist > reach || !InView(frustum, l.pos, it.reach))
+                        break;
+                    const float fade = edge(l.dist);
+                    for (int i = 0; i < 3; ++i)
+                        l.colour[i] = it.colour[i] * il.gain * it.gain * fade;
+                    l.reach = it.reach;
+                    l.kind  = 1;
+                    l.fire  = true;
+                    g_gathered.push_back(l);
+                    ++g_itemLightCount;
+                    break;
+                }
+            }
+        }
     }
     const int n = (std::min)(max, static_cast<int>(g_gathered.size()));
     std::partial_sort(g_gathered.begin(), g_gathered.begin() + n, g_gathered.end(),
