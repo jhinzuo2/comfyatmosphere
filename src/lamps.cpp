@@ -1489,9 +1489,6 @@ int LampsGather(const float cam[3], const D3DMATRIX& viewProj, LampLight* out, i
             if (dx * dx + dy * dy + dz * dz > cull * cull)
                 continue;
             const float cf = cosf(pl.facing), sf = sinf(pl.facing);
-            const float at[3] = { pl.pos[0] + cf * il.forward - sf * il.side,
-                                  pl.pos[1] + sf * il.forward + cf * il.side,
-                                  pl.pos[2] + il.height };
             unsigned used[8];
             int      nused = 0;
             for (unsigned f = 0; f < nfields && nused < 8; ++f)
@@ -1509,6 +1506,13 @@ int LampsGather(const float cam[3], const D3DMATRIX& viewProj, LampLight* out, i
                     if (again)
                         break;
                     used[nused++] = v;
+                    // Where on the character: this item's own place, else the [itemlights] one.
+                    const float h  = it.height  < ItemLight::kUseGlobal ? it.height  : il.height;
+                    const float fw = it.forward < ItemLight::kUseGlobal ? it.forward : il.forward;
+                    const float sd = it.side    < ItemLight::kUseGlobal ? it.side    : il.side;
+                    const float at[3] = { pl.pos[0] + cf * fw - sf * sd,
+                                          pl.pos[1] + sf * fw + cf * sd,
+                                          pl.pos[2] + h };
                     LampLight l = {};
                     for (int i = 0; i < 3; ++i)
                         l.pos[i] = at[i] - cam[i];

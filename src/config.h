@@ -351,6 +351,12 @@ struct ItemLight
     float    colour[3] = { 1.00f, 0.62f, 0.29f };   // a torch's, as the buildings' fires are
     float    reach     = 6.0f;                      // yards
     float    gain      = 1.0f;                      // this item's brightness, times [itemlights] gain
+    // This item's own place on the character, in yards (height above the feet, forward, to the left). kUseGlobal
+    // takes the [itemlights] value.
+    static constexpr float kUseGlobal = 1e9f;
+    float    height    = kUseGlobal;
+    float    forward   = kUseGlobal;
+    float    side      = kUseGlobal;
 };
 
 struct ItemLightSettings

@@ -108,8 +108,8 @@ namespace
 
     float Clamp(float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
-    // [itemlights] items = "12345:FF9A40:6:1.5, 23456". Each entry is the item's entry id, then optionally the
-    // colour (RRGGBB, hex), the reach in yards and the gain. Entries are separated by commas or spaces; the
+    // [itemlights] items = "12345:FF9A40:6:1.5:2.0:0.3:0.4, 23456". Each entry is the item's entry id, then
+    // optionally the colour (RRGGBB, hex), the reach in yards, the gain, and the place: height, forward, side. Entries are separated by commas or spaces; the
     // text runs on to any comment, so it ends at a ';'.
     void ParseItemLights(const wchar_t* text, std::vector<ItemLight>& out)
     {
@@ -157,6 +157,11 @@ namespace
                     it.reach = Clamp(static_cast<float>(atof(part[2].c_str())), 1.0f, 40.0f);
                 if (part.size() > 3 && !part[3].empty())
                     it.gain = Clamp(static_cast<float>(atof(part[3].c_str())), 0.0f, 10.0f);
+                // Parts 5 to 7: height, forward, side. An empty part keeps the [itemlights] value.
+                float* const place[3] = { &it.height, &it.forward, &it.side };
+                for (int k = 0; k < 3; ++k)
+                    if (part.size() > static_cast<size_t>(4 + k) && !part[4 + k].empty())
+                        *place[k] = Clamp(static_cast<float>(atof(part[4 + k].c_str())), -6.0f, 6.0f);
                 if (it.id)
                     out.push_back(it);
             }
